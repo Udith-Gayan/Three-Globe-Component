@@ -1,0 +1,233 @@
+<html>
+  <head>
+    <style>
+      body {
+        margin: 0;
+        height: auto;
+        width: 100vw;
+        overflow: hidden;
+      }
+
+      #globeViz > div:nth-child(2),
+      #globeViz > canvas {
+        width: 100% !important;
+        height: auto !important;
+        min-height: 30vh !important;
+        aspect-ratio: auto 943 / 714 !important;
+      }
+    </style>
+
+    <script src="https://unpkg.com/three"></script>
+    <script src="https://unpkg.com/three-globe"></script>
+  </head>
+
+  <body>
+    <div id="globeViz"></div>
+
+    <script type="importmap">
+      { "imports": { "three": "https://unpkg.com/three/build/three.module.js" } }
+    </script>
+    <script type="module">
+      import { TrackballControls } from 'https://unpkg.com/three/examples/jsm/controls/TrackballControls.js';
+      import { CSS2DRenderer } from 'https://unpkg.com/three/examples/jsm/renderers/CSS2DRenderer.js';
+      Object.assign(THREE, { TrackballControls, CSS2DRenderer });
+
+      // marker pin icon
+      const markerSvg = `<svg viewBox="-4 0 36 36">
+      <path fill="currentColor" d="M14,0 C21.732,0 28,5.641 28,12.6 C28,23.963 14,36 14,36 C14,36 0,24.064 0,12.6 C0,5.641 6.268,0 14,0 Z"></path>
+      <circle fill="black" cx="14" cy="14" r="7"></circle>
+    </svg>`;
+
+      // Gen random data
+      const N = 20;
+
+      const arcsData = [...Array(N).keys()].map(() => ({
+        startLat: (Math.random() - 0.5) * 180,
+        startLng: (Math.random() - 0.5) * 360,
+        endLat: (Math.random() - 0.5) * 180,
+        endLng: (Math.random() - 0.5) * 360,
+        color: ['red', 'white', 'blue', 'green'][Math.round(Math.random() * 3)],
+      }));
+
+      const gData = [...Array(N).keys()].map(() => ({
+        lat: (Math.random() - 0.5) * 180,
+        lng: (Math.random() - 0.5) * 360,
+        size: 7 + Math.random() * 30,
+        color: ['red', 'white', 'blue', 'green'][Math.round(Math.random() * 3)],
+      }));
+
+      const markerElements = [];
+
+      const Globe = new ThreeGlobe()
+        .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
+        .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+        .arcsData(arcsData)
+        .arcColor('color')
+        .arcDashLength(0.4)
+        .arcDashGap(4)
+        .arcCurveResolution(1000)
+        .arcDashInitialGap(() => Math.random() * 5)
+        .arcDashAnimateTime(1000)
+        .htmlElementsData(gData)
+        .htmlElement((d) => {
+          const el = document.createElement('div');
+          el.innerHTML = markerSvg;
+          el.style.color = d.color;
+          el.style.width = `${d.size}px`;
+          el.style.position = 'relative';
+          d.htmlElement = el;
+          markerElements.push(el);
+          return el;
+        });
+
+      // Setup renderer
+      const renderers = [new THREE.WebGLRenderer({ alpha: true }), new THREE.CSS2DRenderer()];
+      const initialWidth = 500;
+      const initialHeight = 10;
+      renderers.forEach((r, idx) => {
+        r.setSize(window.innerWidth, window.innerHeight);
+        // r.setSize(initialWidth, initialHeight);
+        if (idx > 0) {
+          // overlay additional on top of main renderer
+          r.domElement.style.position = 'absolute';
+          r.domElement.style.top = '0px';
+          r.domElement.style.pointerEvents = 'none';
+        }
+        document.getElementById('globeViz').appendChild(r.domElement);
+      });
+
+      // Setup scene
+      const scene = new THREE.Scene();
+      scene.add(Globe);
+      scene.add(new THREE.AmbientLight(0xcccccc));
+      scene.add(new THREE.DirectionalLight(0xffffff, 0.6));
+
+      // Setup camera
+      const camera = new THREE.PerspectiveCamera();
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      camera.position.z = 380; // Zoom level
+
+      let altitudeSL = camera.position.z / Globe.getGlobeRadius();
+      // Initital appearance of the globe set to Sri Lanka
+      const latSL = 7.8774; // Latitude of Sri Lanka
+      const lonSL = 80.7003; // Longitude of Sri Lanka
+      let { x, y, z } = Globe.getCoords(latSL, lonSL, altitudeSL);
+      camera.position.x = x;
+      camera.position.y = y;
+      camera.position.z = z;
+      camera.zoom;
+
+      // Add camera controls
+      const tbControls = new THREE.TrackballControls(camera, renderers[0].domElement);
+      // tbControls.minDistance = 450 ;
+      tbControls.maxDistance = 2000; // zoom out level fixed to
+      tbControls.rotateSpeed = 5;
+      tbControls.zoomSpeed = 0.8;
+      tbControls.object.zoom = 2;
+      tbControls.noZoom = true;
+
+      // Update pov when camera moves
+      Globe.setPointOfView(camera.position, Globe.position);
+      tbControls.addEventListener('change', () => Globe.setPointOfView(camera.position, Globe.position));
+
+      // Zoom in out listen ( mousewheel + ctrl)
+      // window.addEventListener(
+      //   'mousewheel',
+      //   (e) => {
+      //     if (e.ctrlKey) {
+      //       e.preventDefault();
+      //       e.stopPropagation();
+      //       if (e.wheelDelta > 0) {
+      //         camera.position.z = camera.position.z + 10; // Zoom out
+      //         // tbControls.minDistance = tbControls.minDistance + 10 ;
+      //         console.log("zoomout");
+      //       } else {
+      //         camera.position.z = camera.position.z - 10; // Zoom in
+      //         // tbControls.minDistance = tbControls.minDistance - 10 ;
+      //         console.log("zoomin");
+      //       }
+      //     }
+      //   },
+      //   { passive: false }
+      // );
+
+      var zoomSpeed = 0.1; // Adjust the zoom speed as per your requirement
+      var zoomLevel = 1;
+      var isCtrlKeyPressed = false;
+
+      document.addEventListener('wheel', onDocumentMouseWheel, false);
+      document.addEventListener('keydown', onDocumentKeyDown, false);
+      document.addEventListener('keyup', onDocumentKeyUp, false);
+
+      function onDocumentMouseWheel(event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        var delta = event.wheelDelta || -event.detail;
+        var zoomFactor = Math.pow(1 + zoomSpeed, delta);
+
+        if (isCtrlKeyPressed) {
+          // Zoom in/out
+          // camera.zoom *= zoomFactor;
+          camera.position.z += delta * zoomSpeed;
+          // camera.updateProjectionMatrix();
+        } 
+        // else {
+        //   // Scroll to move the camera
+        //   camera.position.z += delta * zoomSpeed;
+        // }
+      }
+
+      function onDocumentKeyDown(event) {
+        if (event.keyCode === 17) {
+          // Ctrl key is pressed
+          isCtrlKeyPressed = true;
+        }
+      }
+
+      function onDocumentKeyUp(event) {
+        if (event.keyCode === 17) {
+          // Ctrl key is released
+          isCtrlKeyPressed = false;
+        }
+      }
+
+      // Function to handle window resize
+      function handleResize() {
+        // Update camera aspect ratio
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+
+        // Update renderer size
+        renderers.forEach((r) => {
+          r.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Update marker positions
+        markerElements.forEach((marker, index) => {
+          const { lat, lng, size } = gData[index];
+          const { x, y } = Globe.getCoords(lat, lng);
+          const containerRect = document.getElementById('globeViz').getBoundingClientRect();
+          // marker.style.left = `${containerRect.left + (containerRect.width * (x + 1)) / 2}px`;
+          // marker.style.top = `${containerRect.top + containerRect.height * (1 - (y + 1) / 2)}px`;
+
+          marker.style.fontSize = `${size}px`;
+        });
+      }
+      handleResize();
+
+      // Add event listener for window resize
+      window.addEventListener('resize', handleResize);
+
+      // Kick-off renderer
+      (function animate() {
+        // IIFE
+        // Frame cycle
+        tbControls.update();
+        renderers.forEach((r) => r.render(scene, camera));
+        requestAnimationFrame(animate);
+      })();
+    </script>
+  </body>
+</html>

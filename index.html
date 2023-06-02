@@ -1,0 +1,315 @@
+<html>
+  <head>
+    <style>
+      body {
+        margin: 0;
+        height: auto;
+        width: 100vw;
+        overflow: hidden;
+      }
+
+      #globeViz > div:nth-child(2),
+      #globeViz > canvas {
+        width: 100% !important;
+        height: auto !important;
+        min-height: 100vh !important;
+        aspect-ratio: auto 943 / 714 !important;
+      }
+    </style>
+
+    <script src="https://unpkg.com/three"></script>
+    <script src="https://unpkg.com/three-globe"></script>
+    <script src="https://code.jquery.com/jquery-3.7.0.js"></script>
+  </head>
+
+  <body>
+    <div id="globeViz"></div>
+
+    <script type="importmap">
+      { "imports": { "three": "https://unpkg.com/three/build/three.module.js" } }
+    </script>
+    <script type="module">
+      import { TrackballControls } from 'https://unpkg.com/three/examples/jsm/controls/TrackballControls.js';
+      import { CSS2DRenderer } from 'https://unpkg.com/three/examples/jsm/renderers/CSS2DRenderer.js';
+      Object.assign(THREE, { TrackballControls, CSS2DRenderer });
+
+      // marker pin icon
+      const markerSvg = `<svg viewBox="-4 0 36 36">
+      <path fill="currentColor" d="M14,0 C21.732,0 28,5.641 28,12.6 C28,23.963 14,36 14,36 C14,36 0,24.064 0,12.6 C0,5.641 6.268,0 14,0 Z"></path>
+      <circle fill="black" cx="14" cy="14" r="7"></circle>
+    </svg>`;
+
+      const generateColors = (numColors) => {
+        const colors = [];
+        const base = 360 / numColors;
+
+        for (let i = 0; i < numColors; i++) {
+          const hue = Math.floor(i * base);
+          const color = `hsl(${hue}, 100%, 50%)`;
+          colors.push(color);
+        }
+
+        return colors;
+      };
+
+      // Generate an array of 50 colors
+      const colors = [
+  'red',
+  'blue',
+  'green',
+  'yellow',
+  'orange',
+  'purple',
+  'pink',
+  'cyan',
+  'brown',
+  'gray',
+  'magenta',
+  'lime',
+  'teal',
+  'navy',
+  'olive',
+  'maroon',
+  'silver',
+  'aqua',
+  'indigo',
+  'violet',
+  'gold',
+  'coral',
+  'salmon',
+  'turquoise',
+  'lavender',
+  'slateblue',
+  'chartreuse',
+  'peru',
+  'thistle',
+  'sienna',
+  'crimson',
+  'khaki',
+  'orchid',
+  'deeppink',
+  'steelblue',
+  'tomato',
+  'mediumseagreen',
+  'darkslategray',
+  'darkorange',
+  'mediumvioletred',
+  'royalblue',
+  'mediumaquamarine',
+  'darkgreen',
+  'firebrick',
+  'darkorchid',
+  'cadetblue',
+  'orangered',
+  'mediumslateblue',
+  'limegreen',
+];
+
+
+      // **************************
+
+      const hostResponse = await fetch('https://firestore.googleapis.com/v1/projects/evernodeindex/databases/(default)/documents/rGVHr1PrfL93UAjyw3DWZoi9adz2sLp2yL_hosts?pageSize=200');
+      const documents = (await hostResponse.json()).documents;
+      const locations = documents
+        .map((doc) => {
+          // console.log(doc.fields.location)
+          if (doc.fields.location) {
+            const loc = doc.fields.location.mapValue.fields;
+            return {
+              lat: +loc.latitude.stringValue,
+              lng: +loc.longitude.stringValue,
+              size: 10 + Math.random() * 15,
+              color: colors[Math.round(Math.random() * (colors.length-1))],
+            };
+          } else return null;
+        })
+        .filter((loc) => loc != null);
+
+      locations.push({ lat: 7.8774, lng: 80.7003, size: 7 + Math.random() * 30, color: 'purple' });
+
+      // ********************************************
+
+      // Threshold values for closeness in latitude and longitude
+      const latThreshold = 0.0000000000001; // Adjust the threshold value as needed (in degrees)
+      const lngThreshold = 0.000000000001; // Adjust the threshold value as needed (in degrees)
+
+      // Function to calculate the distance between two locations using latitude and longitude
+      function getDistance(lat1, lng1, lat2, lng2) {
+        const latDiff = Math.abs(lat1 - lat2);
+        const lngDiff = Math.abs(lng1 - lng2);
+        return Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+      }
+
+      // Function to remove locations that are very close
+      function removeCloseLocations(locations, latThreshold, lngThreshold) {
+        for (let i = 0; i < locations.length; i++) {
+          const currentLocation = locations[i];
+          for (let j = i + 1; j < locations.length; j++) {
+            const otherLocation = locations[j];
+            const distance = getDistance(currentLocation.lat, currentLocation.lng, otherLocation.lat, otherLocation.lng);
+            if (distance < latThreshold || distance < lngThreshold) {
+              // Remove one of the locations
+              locations.splice(j, 1);
+              // Adjust the index since the array length has changed
+              j--;
+            }
+          }
+        }
+      }
+
+      // Call the function to remove close locations
+      removeCloseLocations(locations, latThreshold, lngThreshold);
+
+      // ***********************************************************
+
+      // ***************************
+
+      // Gen random data
+      const N = 400;
+
+      const arcsData = [...Array(N).keys()].map(() => {
+        const rp1 = locations[Math.round(Math.random() * (locations.length - 1))];
+        const rp2 = locations[Math.round(Math.random() * (locations.length - 1))];
+        return {
+          startLat: rp1.lat,
+          startLng: rp1.lng,
+          endLat: rp2.lat,
+          endLng: rp2.lng,
+          color: colors[Math.round(Math.random() * (colors.length-1))],
+        };
+      });
+
+      const markerElements = [];
+
+      const Globe = new ThreeGlobe()
+        .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
+        .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+        .arcsData(arcsData)
+        .arcColor('color')
+        .arcDashLength(0.4)
+        .arcDashGap(4)
+        .arcCurveResolution(1000)
+        .arcDashInitialGap(() => Math.random() * 5)
+        .arcDashAnimateTime(1000)
+        .htmlElementsData(locations)
+        .htmlElement((d) => {
+          const el = document.createElement('div');
+          el.innerHTML = markerSvg;
+          el.style.color = d.color;
+          el.style.width = `${d.size}px`;
+          el.style.position = 'relative';
+          d.htmlElement = el;
+          markerElements.push(el);
+          return el;
+        });
+
+      // Setup renderer
+      const renderers = [new THREE.WebGLRenderer({ alpha: true }), new THREE.CSS2DRenderer()];
+      const initialWidth = 500;
+      const initialHeight = 10;
+      renderers.forEach((r, idx) => {
+        r.setSize(window.innerWidth, window.innerHeight);
+        // r.setSize(initialWidth, initialHeight);
+        if (idx > 0) {
+          // overlay additional on top of main renderer
+          r.domElement.style.position = 'absolute';
+          r.domElement.style.top = '0px';
+          r.domElement.style.pointerEvents = 'none';
+        }
+        document.getElementById('globeViz').appendChild(r.domElement);
+      });
+
+      // Setup scene
+      const scene = new THREE.Scene();
+      scene.add(Globe);
+      scene.add(new THREE.AmbientLight(0xcccccc));
+      scene.add(new THREE.DirectionalLight(0xffffff, 0.6));
+
+      // Setup camera
+      const camera = new THREE.PerspectiveCamera();
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      camera.position.z = 380; // Zoom level
+
+      let altitudeSL = camera.position.z / Globe.getGlobeRadius();
+      // Initital appearance of the globe set to Sri Lanka
+      const latSL = 7.8774; // Latitude of Sri Lanka
+      const lonSL = 80.7003; // Longitude of Sri Lanka
+      let { x, y, z } = Globe.getCoords(latSL, lonSL, altitudeSL);
+      camera.position.x = x;
+      camera.position.y = y;
+      camera.position.z = z;
+      camera.zoom;
+
+      // Add camera controls
+      const tbControls = new THREE.TrackballControls(camera, renderers[0].domElement);
+      // tbControls.minDistance = 450 ;
+      // tbControls.maxDistance = 2000 ;   // zoom out level fixed to
+      tbControls.rotateSpeed = 5;
+      tbControls.zoomSpeed = 0.8;
+      tbControls.object.zoom = 2;
+      tbControls.noZoom = true;
+
+      // Update pov when camera moves
+      Globe.setPointOfView(camera.position, Globe.position);
+      tbControls.addEventListener('change', () => Globe.setPointOfView(camera.position, Globe.position));
+
+      // Zoom in out listen ( mousewheel + ctrl)
+      window.addEventListener(
+        'mousewheel',
+        (e) => {
+          if (e.ctrlKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.wheelDelta > 0) {
+              if (camera.zoom > 0.8) {
+                camera.zoom = camera.zoom - 0.2;
+                camera.updateProjectionMatrix();
+              }
+            } else {
+              if (camera.zoom < 25) {
+                camera.zoom = camera.zoom + 0.2;
+                camera.updateProjectionMatrix();
+              }
+            }
+          }
+        },
+        { passive: false }
+      );
+
+      // Function to handle window resize
+      function handleResize() {
+        // Update camera aspect ratio
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+
+        // Update renderer size
+        renderers.forEach((r) => {
+          r.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Update marker positions
+        markerElements.forEach((marker, index) => {
+          const { lat, lng, size } = gData[index];
+          const { x, y } = Globe.getCoords(lat, lng);
+          const containerRect = document.getElementById('globeViz').getBoundingClientRect();
+
+          marker.style.fontSize = `${size}px`;
+        });
+      }
+      handleResize();
+
+      // Add event listener for window resize
+      window.addEventListener('resize', handleResize);
+
+      // Kick-off renderer
+      (function animate() {
+        // IIFE
+        // Frame cycle
+        tbControls.update();
+        renderers.forEach((r) => r.render(scene, camera));
+        requestAnimationFrame(animate);
+      })();
+    </script>
+  </body>
+</html>
