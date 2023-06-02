@@ -1,5 +1,8 @@
 <html>
   <head>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Catamaran:wght@300;400;500&family=Raleway:wght@300&family=Roboto:wght@300&display=swap" rel="stylesheet" />
     <style>
       body {
         margin: 0;
@@ -15,6 +18,47 @@
         min-height: 100vh !important;
         aspect-ratio: auto 943 / 714 !important;
       }
+
+      #infoWindow {
+        min-width: 174px;
+        height: auto;
+        background-color: #130e1b9c;
+        border: 1px solid #2771ab40;
+        color: #fff;
+        position: fixed;
+        top: 10px;
+        right: 20px;
+        border-radius: 5px;
+        z-index: 100;
+      }
+
+      #infoWindow > h3 {
+        margin: 0;
+        border-top-left-radius: 5px;
+        border-top-right-radius: 5px;
+        text-align: center;
+        background: #2771ab;
+        font-family: 'Catamaran', sans-serif;
+      }
+
+      #host-content {
+        padding: 10px;
+        border-bottom-left-radius: 5px;
+        border-bottom-right-radius: 5px;
+      }
+
+      #host-content td {
+        margin: 0;
+        font-family: 'Roboto', sans-serif;
+        color: #fff;
+      }
+
+      #marker-example {
+        width: 25px;
+        height: 16px;
+      }
+
+      
     </style>
 
     <script src="https://unpkg.com/three"></script>
@@ -24,6 +68,15 @@
 
   <body>
     <div id="globeViz"></div>
+    <div id="infoWindow">
+      <h3>Host Info</h3>
+      <table id="host-content">
+        <td><i>Click</i> <svg id="marker-example" viewBox="-4 0 36 36">
+          <path fill="currentColor" d="M14,0 C21.732,0 28,5.641 28,12.6 C28,23.963 14,36 14,36 C14,36 0,24.064 0,12.6 C0,5.641 6.268,0 14,0 Z"></path>
+          <circle fill="red" cx="14" cy="14" r="7"></circle>
+        </svg> <i>on the globe for details</i></td>
+      </table>
+    </div>
 
     <script type="importmap">
       { "imports": { "three": "https://unpkg.com/three/build/three.module.js" } }
@@ -35,78 +88,64 @@
 
       // marker pin icon
       const markerSvg = `<svg viewBox="-4 0 36 36">
-      <path fill="currentColor" d="M14,0 C21.732,0 28,5.641 28,12.6 C28,23.963 14,36 14,36 C14,36 0,24.064 0,12.6 C0,5.641 6.268,0 14,0 Z"></path>
-      <circle fill="black" cx="14" cy="14" r="7"></circle>
-    </svg>`;
-
-      const generateColors = (numColors) => {
-        const colors = [];
-        const base = 360 / numColors;
-
-        for (let i = 0; i < numColors; i++) {
-          const hue = Math.floor(i * base);
-          const color = `hsl(${hue}, 100%, 50%)`;
-          colors.push(color);
-        }
-
-        return colors;
-      };
+        <path fill="currentColor" d="M14,0 C21.732,0 28,5.641 28,12.6 C28,23.963 14,36 14,36 C14,36 0,24.064 0,12.6 C0,5.641 6.268,0 14,0 Z"></path>
+        <circle fill="black" cx="14" cy="14" r="7"></circle>
+      </svg>`;
 
       // Generate an array of 50 colors
       const colors = [
-  'red',
-  'blue',
-  'green',
-  'yellow',
-  'orange',
-  'purple',
-  'pink',
-  'cyan',
-  'brown',
-  'gray',
-  'magenta',
-  'lime',
-  'teal',
-  'navy',
-  'olive',
-  'maroon',
-  'silver',
-  'aqua',
-  'indigo',
-  'violet',
-  'gold',
-  'coral',
-  'salmon',
-  'turquoise',
-  'lavender',
-  'slateblue',
-  'chartreuse',
-  'peru',
-  'thistle',
-  'sienna',
-  'crimson',
-  'khaki',
-  'orchid',
-  'deeppink',
-  'steelblue',
-  'tomato',
-  'mediumseagreen',
-  'darkslategray',
-  'darkorange',
-  'mediumvioletred',
-  'royalblue',
-  'mediumaquamarine',
-  'darkgreen',
-  'firebrick',
-  'darkorchid',
-  'cadetblue',
-  'orangered',
-  'mediumslateblue',
-  'limegreen',
-];
+        'red',
+        'blue',
+        'green',
+        'yellow',
+        'orange',
+        'purple',
+        'pink',
+        'cyan',
+        'brown',
+        'gray',
+        'magenta',
+        'lime',
+        'teal',
+        'navy',
+        'olive',
+        'maroon',
+        'silver',
+        'aqua',
+        'indigo',
+        'violet',
+        'gold',
+        'coral',
+        'salmon',
+        'turquoise',
+        'lavender',
+        'slateblue',
+        'chartreuse',
+        'peru',
+        'thistle',
+        'sienna',
+        'crimson',
+        'khaki',
+        'orchid',
+        'deeppink',
+        'steelblue',
+        'tomato',
+        'mediumseagreen',
+        'darkslategray',
+        'darkorange',
+        'mediumvioletred',
+        'royalblue',
+        'mediumaquamarine',
+        'darkgreen',
+        'firebrick',
+        'darkorchid',
+        'cadetblue',
+        'orangered',
+        'mediumslateblue',
+        'limegreen',
+      ];
 
-
-      // **************************
+      // ********** API call to fetch host details****************
 
       const hostResponse = await fetch('https://firestore.googleapis.com/v1/projects/evernodeindex/databases/(default)/documents/rGVHr1PrfL93UAjyw3DWZoi9adz2sLp2yL_hosts?pageSize=200');
       const documents = (await hostResponse.json()).documents;
@@ -115,19 +154,40 @@
           // console.log(doc.fields.location)
           if (doc.fields.location) {
             const loc = doc.fields.location.mapValue.fields;
+            console.log(doc);
+            const targetObjectBeforeSort = {};
+            const sourceObject = { cpu_count: 'CPU Count', country_code: 'Country', ram_mb: 'RAM(Mb)', address: 'Address', last_heartbeat_index: 'Last heartbeat index',
+                                   max_instances: 'Max instances', active_instances: 'Instance active', cpu_model_name: 'CPU model', disk_mb : 'Disk size (Mb)' };
+            for (const key in doc.fields) {
+              if (sourceObject.hasOwnProperty(key)) {
+                const value = doc.fields[key];
+                // Perform any desired transformations on the value before assigning it
+                targetObjectBeforeSort[sourceObject[key]] = value;
+              }
+            }
+
+            const sortedKeys = Object.keys(targetObjectBeforeSort).sort();
+            const targetObject = {};
+
+            for (const key of sortedKeys) {
+              targetObject[key] = targetObjectBeforeSort[key];
+            }
+
             return {
               lat: +loc.latitude.stringValue,
               lng: +loc.longitude.stringValue,
               size: 10 + Math.random() * 15,
-              color: colors[Math.round(Math.random() * (colors.length-1))],
+              color: colors[Math.round(Math.random() * (colors.length - 1))],
+              info: targetObject,
             };
           } else return null;
         })
         .filter((loc) => loc != null);
 
-      locations.push({ lat: 7.8774, lng: 80.7003, size: 7 + Math.random() * 30, color: 'purple' });
+      // Adding Sri lanka
+      // locations.push({ lat: 7.8774, lng: 80.7003, size: 7 + Math.random() * 30, color: 'purple' });
 
-      // ********************************************
+      // ************Removing close points based on a threshold value ********************************
 
       // Threshold values for closeness in latitude and longitude
       const latThreshold = 0.0000000000001; // Adjust the threshold value as needed (in degrees)
@@ -164,7 +224,7 @@
 
       // ***************************
 
-      // Gen random data
+      // No of arcs rquired
       const N = 400;
 
       const arcsData = [...Array(N).keys()].map(() => {
@@ -175,12 +235,35 @@
           startLng: rp1.lng,
           endLat: rp2.lat,
           endLng: rp2.lng,
-          color: colors[Math.round(Math.random() * (colors.length-1))],
+          color: colors[Math.round(Math.random() * (colors.length - 1))],
         };
       });
 
-      const markerElements = [];
+      // async function fetchEvrs(walletAddress) {
+      //   const response = await fetch('https://hooks-testnet-v3.xrpl-labs.com', {
+      //     method: 'POST',
+      //     headers: {
+      //       'Content-Type': 'application/json',
+      //     },
+      //     body: JSON.stringify({
+      //       method: 'account_lines',
+      //       params: [
+      //         {
+      //           account: walletAddress,
+      //           ledger_index: 'validated',
+      //         },
+      //       ],
+      //     }),
+      //   });
 
+      //   const dataJson = await response.json();
+      //   const balance = (dataJson.result.lines.filter(l => l.currency == 'EVR')[0]).balance;
+      //   return balance;
+
+      // }
+
+
+      const markerElements = [];
       const Globe = new ThreeGlobe()
         .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
         .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
@@ -190,14 +273,44 @@
         .arcDashGap(4)
         .arcCurveResolution(1000)
         .arcDashInitialGap(() => Math.random() * 5)
-        .arcDashAnimateTime(1000)
+        .arcDashAnimateTime(2500)
         .htmlElementsData(locations)
         .htmlElement((d) => {
           const el = document.createElement('div');
           el.innerHTML = markerSvg;
           el.style.color = d.color;
+          el.style.cursor = 'pointer';
           el.style.width = `${d.size}px`;
           el.style.position = 'relative';
+          // Store the marker object in a custom data property
+          el.data = d;
+          // Set CSS styles for marker elements
+          el.style.zIndex = '1'; // Higher z-index to position above other elements
+          el.style.pointerEvents = 'auto'; // Enable click events
+
+          // click event for the markers
+          el.addEventListener('click', async () => {
+            const info = d.info;
+            const contentWindow = document.getElementById('host-content');
+            contentWindow.style.display = "block";
+            let detailString = '';
+            for (const key in info) {
+              const valuesArray = Object.values(info[key]);
+              const firstValue = valuesArray[0];
+              if (key == 'Country') {
+                const svgPath = './flags/4x3/' + firstValue.toLowerCase() + '.svg';
+                detailString = detailString + `<tr><td>${key}</td><td> : <img src=${svgPath} alt=${firstValue} style="width: 25px; height: 16px;"></td></tr>`;
+              } else {
+                detailString = detailString + `<tr><td>${key}</td><td> : ${firstValue}</td></tr>`;
+              }
+            }
+
+            // const evrAmount = await fetchEvrs(info["Address"]);
+            // detailString = detailString + `<p>Earned EVRs : ${evrAmount}</p>`;
+
+            contentWindow.innerHTML = detailString;
+          });
+
           d.htmlElement = el;
           markerElements.push(el);
           return el;
@@ -277,6 +390,30 @@
         { passive: false }
       );
 
+      window.addEventListener(
+        'gesturestart',
+        (e) => {
+          if (true) {
+            if (camera.zoom > 0.8) {
+              camera.zoom = camera.zoom - 0.2;
+              camera.updateProjectionMatrix();
+            }
+          }
+        },
+        { passive: false }
+      );
+
+      window.addEventListener(
+        'gestureend',
+        (e) => {
+          if (camera.zoom < 25) {
+            camera.zoom = camera.zoom + 0.2;
+            camera.updateProjectionMatrix();
+          }
+        },
+        { passive: false }
+      );
+
       // Function to handle window resize
       function handleResize() {
         // Update camera aspect ratio
@@ -289,15 +426,16 @@
         });
 
         // Update marker positions
-        markerElements.forEach((marker, index) => {
-          const { lat, lng, size } = gData[index];
-          const { x, y } = Globe.getCoords(lat, lng);
-          const containerRect = document.getElementById('globeViz').getBoundingClientRect();
+        // markerElements.forEach((marker, index) => {
+        //   const { lat, lng, size } = gData[index];
+        //   const { x, y } = Globe.getCoords(lat, lng);
+        //   const containerRect = document.getElementById('globeViz').getBoundingClientRect();
 
-          marker.style.fontSize = `${size}px`;
-        });
+        //   marker.style.fontSize = `${size}px`;
+        // });
       }
       handleResize();
+      // addClickEventToMarkers();
 
       // Add event listener for window resize
       window.addEventListener('resize', handleResize);
