@@ -146,43 +146,96 @@
       ];
 
       // ********** API call to fetch host details****************
-
+      //const socket = await connectWebSocket('wss://hooks-testnet-v3.xrpl-labs.com');
       const hostResponse = await fetch('https://firestore.googleapis.com/v1/projects/evernodeindex/databases/(default)/documents/rGVHr1PrfL93UAjyw3DWZoi9adz2sLp2yL_hosts?pageSize=200');
       const documents = (await hostResponse.json()).documents;
-      const locations = documents
-        .map((doc) => {
-          // console.log(doc.fields.location)
+      const locations = [];
+        for(var doc of documents){
           if (doc.fields.location) {
             const loc = doc.fields.location.mapValue.fields;
-            console.log(doc);
             const targetObjectBeforeSort = {};
-            const sourceObject = { cpu_count: 'CPU Count', country_code: 'Country', ram_mb: 'RAM(Mb)', address: 'Address', last_heartbeat_index: 'Last heartbeat index',
-                                   max_instances: 'Max instances', active_instances: 'Instance active', cpu_model_name: 'CPU model', disk_mb : 'Disk size (Mb)' };
+            const sourceObject = 
+            {
+              cpu_count: { Label: 'CPU Count', Order: 1 },
+              country_code: { Label: 'Country', Order: 2 },
+              ram_mb: { Label: 'RAM(Mb)', Order: 3 },
+              address: { Label: 'Address', Order: 4 },
+              last_heartbeat_index: { Label: 'Last heartbeat index', Order: 5 },
+              max_instances: { Label: 'Max instances', Order: 6 },
+              active_instances: { Label: 'Instance active', Order: 7 },
+              cpu_model_name: { Label: 'CPU model', Order: 8 },
+              disk_mb: { Label: 'Disk size (Mb)', Order: 9 }
+            };
+
             for (const key in doc.fields) {
               if (sourceObject.hasOwnProperty(key)) {
                 const value = doc.fields[key];
                 // Perform any desired transformations on the value before assigning it
-                targetObjectBeforeSort[sourceObject[key]] = value;
+                targetObjectBeforeSort[sourceObject[key].Label] = {Value: Object.values(value)[0], Order: sourceObject[key].Order};
               }
             }
 
-            const sortedKeys = Object.keys(targetObjectBeforeSort).sort();
-            const targetObject = {};
+            // const payload = {
+            //   method: 'account_lines',
+            //   account: targetObjectBeforeSort.Address.Value,
+            //   ledger_index: 'validated'
+            // };
+            // const response = await sendWebSocketMessage(socket, payload);  
+            // const responseJson = JSON.parse(response);
+            // const balance = +responseJson.result.lines.filter(line => line.currency === 'EVR')[0].balance;
+            // targetObjectBeforeSort["EVR"] = {Value: balance.toFixed(2), Order: 0}
 
-            for (const key of sortedKeys) {
-              targetObject[key] = targetObjectBeforeSort[key];
-            }
+            // Sort the object by Order
+            const targetObject = Object.fromEntries(
+              Object.entries(targetObjectBeforeSort)
+                .sort(([, a], [, b]) => a.Order - b.Order)
+            );
 
-            return {
+            locations.push( {
               lat: +loc.latitude.stringValue,
               lng: +loc.longitude.stringValue,
               size: 10 + Math.random() * 15,
               color: colors[Math.round(Math.random() * (colors.length - 1))],
               info: targetObject,
+            });
+          }
+        }
+
+        function connectWebSocket(url) {
+          return new Promise((resolve, reject) => {
+            const socket = new WebSocket(url);
+
+            // Event handler for WebSocket connection established
+            socket.onopen = function(event) {
+              //console.log('WebSocket connection established.');
+              resolve(socket);
             };
-          } else return null;
-        })
-        .filter((loc) => loc != null);
+
+            // Event handler for WebSocket connection errors
+            socket.onerror = function(error) {
+              console.error('WebSocket error:', error);
+              reject(error);
+            };
+          });
+        }
+
+      function sendWebSocketMessage(socket, message) {
+          return new Promise((resolve, reject) => {
+            socket.onmessage = function(event) {
+              const receivedMessage = event.data;
+              //console.log('Received message:', receivedMessage);
+              resolve(receivedMessage);
+            };
+
+            socket.send(JSON.stringify(message));
+
+            // Event handler for WebSocket connection errors
+            socket.onerror = function(error) {
+              console.error('WebSocket error:', error);
+              reject(error);
+            };
+          });
+        }
 
       // Adding Sri lanka
       // locations.push({ lat: 7.8774, lng: 80.7003, size: 7 + Math.random() * 30, color: 'purple' });
@@ -286,7 +339,7 @@
           el.data = d;
           // Set CSS styles for marker elements
           el.style.zIndex = '1'; // Higher z-index to position above other elements
-          el.style.pointerEvents = 'auto'; // Enable click events
+          el.style.pointerEvents = 'auto'; // Enable click events   
 
           // click event for the markers
           el.addEventListener('click', async () => {
@@ -295,20 +348,31 @@
             contentWindow.style.display = "block";
             let detailString = '';
             for (const key in info) {
-              const valuesArray = Object.values(info[key]);
-              const firstValue = valuesArray[0];
+              const propValue = info[key].Value;
               if (key == 'Country') {
-                const svgPath = './flags/4x3/' + firstValue.toLowerCase() + '.svg';
-                detailString = detailString + `<tr><td>${key}</td><td> : <img src=${svgPath} alt=${firstValue} style="width: 25px; height: 16px;"></td></tr>`;
+                const svgPath = './flags/4x3/' + propValue.toLowerCase() + '.svg';
+                detailString = detailString + `<tr><td>${key}</td><td> : <img src=${svgPath} alt=${propValue} style="width: 25px; height: 16px;"></td></tr>`;
               } else {
-                detailString = detailString + `<tr><td>${key}</td><td> : ${firstValue}</td></tr>`;
+                detailString = detailString + `<tr><td>${key}</td><td> : ${propValue}</td></tr>`;
               }
             }
 
+            const socket = await connectWebSocket('wss://hooks-testnet-v3.xrpl-labs.com');  
+
+            const payload = {
+              method: 'account_lines',
+              account: info["Address"].Value,
+              ledger_index: 'validated'
+            };
+            const response = await sendWebSocketMessage(socket, payload);  
+            const responseJson = JSON.parse(response);
+            const balance = +responseJson.result.lines.filter(line => line.currency === 'EVR')[0].balance;
+            detailString = `<tr><td>Earned EVRs</td><td> : ${balance.toFixed(2)}</td></tr>` + detailString;
             // const evrAmount = await fetchEvrs(info["Address"]);
             // detailString = detailString + `<p>Earned EVRs : ${evrAmount}</p>`;
 
             contentWindow.innerHTML = detailString;
+            socket.close();
           });
 
           d.htmlElement = el;
